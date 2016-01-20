@@ -1,0 +1,170 @@
+#!/usr/bin/env php
+<?php
+/**
+ * AniTime
+ *
+ * しょぼいカレンダーAPIから放送情報を取得して表示する。
+ * 表示する局や放送時間など設定できるようにするつもり。
+ *
+ * [options]
+ * --force, -F: キャッシュを破棄して番組を再取得する
+ */
+
+(new AniTime())->render();
+
+class AniTime {
+    const API               = 'http://cal.syoboi.jp/rss2.php?alt=json';
+    const CONFIG_FILE       = '~/.anitime/config.json';
+    const CACHE_FILE_FORMAT = '/tmp/anitime_%s.json';
+
+    private $programs    = null;
+    private $today       = null;
+    private $timeStartHi = '2000';
+    private $timeEndH    = '4';
+    private $rule        = [
+        'ChGID' => ['1'],
+        'Cat'   => ['1', '10'],
+    ];
+
+    public function __construct() {
+        $opt = getopt('fh', ['force', 'help']);
+        // キャッシュの破棄
+        if (isset($opt['f']) || isset($opt['force'])) {
+            array_map('unlink', glob(sprintf(self::CACHE_FILE_FORMAT, '*')));
+        }
+        // ヘルプ表示
+        if (isset($opt['h']) || isset($opt['help'])) {
+            // TODO: 使用方法、オプション
+            echo 'しょぼいカレンダーAPIから放送情報を取得して表示します。'.PHP_EOL;
+            exit;
+        }
+
+        $this->today = (new DateTime())->setTimezone(new DateTimeZone('Asia/Tokyo'));
+        // 設定ファイル読み込み
+        if (file_exists(self::CONFIG_FILE)) {
+            $this->setConfig(json_decode(file_get_contents(self::CONFIG_FILE)));
+        }
+    }
+
+    public function render() {
+        $this->setPrograms();
+
+        if (!empty($this->programs)) {
+            $animes = [];
+            $timezone = new DateTimeZone('Asia/Tokyo');
+            foreach ($this->programs->items as $anime) {
+                if ($this->validate($anime)) {
+                    $animes[] = [
+                        'title'   => $anime->Title,
+                        'date'    => (new DateTime('@'.$anime->StTime))->setTimezone($timezone)->format('m/d H:i'),
+                        'channel' => $anime->ChName,
+                    ];
+                }
+            }
+            if (!empty($animes)) {
+                foreach ($animes as $anime) {
+                    echo "{$anime['date']} => {$anime['title']}({$anime['channel']})".PHP_EOL;
+                }
+                return;
+            }
+        }
+        echo '放送予定の番組はありません。'.PHP_EOL;
+        return;
+    }
+
+    private function setPrograms() {
+        // キャッシュ読み込み
+        $cachefile = sprintf(self::CACHE_FILE_FORMAT, $this->today->format('Ymd'));
+        if (file_exists($cachefile)) {
+            $this->programs = json_decode(file_get_contents($cachefile));
+        } else {
+            // キャッシュが無ければAPIアクセスしてキャッシュする
+            $d = clone $this->today;
+            $startDate = $d->format('Ymd'.$this->timeStartHi);
+            $endDate   = $d->modify('+1 days')->setTime($this->timeEndH, 59)->format('Ymdhi');
+
+            $json = self::getJson(self::API.sprintf('&start=%s&end=%s', $startDate, $endDate));
+            file_put_contents(sprintf(self::CACHE_FILE_FORMAT, $this->today->format('Ymd')), $json);
+            $this->programs = json_decode($json);
+        }
+    }
+
+    private static function getJson(string $url) {
+        $ch = curl_init($url);
+
+        curl_setopt_array($ch, [
+            CURLOPT_CUSTOMREQUEST  => 'GET',
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FAILONERROR    => true,
+            // CURLOPT_USERAGENT      => '',
+        ]);
+
+        try {
+            if (!$json = curl_exec($ch)) {
+                throw new Exception(curl_error($ch));
+            }
+        } catch(Exception $e) {
+            echo $e->getFile().':'.$e->getLine().' '.$e->getMessage()."\n";
+            exit;
+        }
+
+        return $json;
+    }
+
+    private function setConfig($config) {
+        try {
+            if (!empty($config['timeStartHi'])) {
+                if (strlen($config['timeStartHi']) != 4 || strtotime($config['timeStartHi'].'00') === false) {
+                    throw new Exception('[timeStartHi]: timeStartHiはHi形式で指定してください');
+                }
+                $this->timeStartHi = $config['timeStartHi'];
+            }
+            if (!empty($config['timeEndH'])) {
+                if (strlen($config['timeEndH']) != 2 || strtotime($config['timeEndH'].'0000') === false) {
+                    throw new Exception('[timeEndH]: timeEndHiはH形式で指定してください');
+                }
+                $this->timeEndH = $config['timeEndH'];
+            }
+
+            $idCheck = function($ids, $rule) {
+                if (!is_array($ids)) {
+                    throw new Exception("[{$rule}]: 配列形式で指定してください。");
+                }
+                array_map(function($id) {
+                    if (!is_numeric($id)) {
+                        throw new Exception("[{$rule}]: IDを数値で指定してください。");
+                    }
+                }, $ids);
+                $this->rule[$rule] = $ids;
+            };
+            if (!empty($config['ChGID'])) {
+                $idCheck($config['ChGID'], 'ChGID');
+            }
+            if (!empty($config['Cat'])) {
+                $idCheck($config['Cat'], 'Cat');
+            }
+        } catch (Exception $e) {
+            echo 'ConfigError'.$e->getMessage().PHP_EOL;
+            exit;
+        }
+        return true;
+    }
+
+    private function validate($anime) {
+        $isAgreement = true;
+        foreach ($this->rule as $rule => $val) {
+            foreach ($val as $v) {
+                if ($anime->{$rule} === $v) {
+                    $isAgreement = true;
+                    break;
+                }
+                $isAgreement = false;
+            }
+            if (!$isAgreement) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
