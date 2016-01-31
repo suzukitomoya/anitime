@@ -7,14 +7,13 @@
  * 表示する局や放送時間など設定できるようにするつもり。
  *
  * [options]
- * --force, -F: キャッシュを破棄して番組を再取得する
+ * --force, -f: キャッシュを破棄して番組を再取得する
  */
 
 (new AniTime())->render();
 
 class AniTime {
     const API               = 'http://cal.syoboi.jp/rss2.php?alt=json';
-    const CONFIG_FILE       = '~/.anitime/config.json';
     const CACHE_FILE_FORMAT = '/tmp/anitime_%s.json';
 
     private $programs    = null;
@@ -22,12 +21,17 @@ class AniTime {
     private $timeStartHi = '2000';
     private $timeEndH    = '4';
     private $rule        = [
-        'ChGID' => ['1'],
-        'Cat'   => ['1', '10'],
+        'ChID'  => [],
+        'ChGID' => [],
+        'Cat'   => [],
     ];
 
+    /**
+     * オプションの判断と設定読み込み
+     */
     public function __construct() {
         $opt = getopt('fh', ['force', 'help']);
+        $configPath = self::getHomeDir().'/config.json';
         // キャッシュの破棄
         if (isset($opt['f']) || isset($opt['force'])) {
             array_map('unlink', glob(sprintf(self::CACHE_FILE_FORMAT, '*')));
@@ -41,14 +45,19 @@ class AniTime {
 
         $this->today = (new DateTime())->setTimezone(new DateTimeZone('Asia/Tokyo'));
         // 設定ファイル読み込み
-        if (file_exists(self::CONFIG_FILE)) {
-            $this->setConfig(json_decode(file_get_contents(self::CONFIG_FILE)));
+        if (file_exists($configPath)) {
+            $this->setConfig(json_decode(file_get_contents($configPath), true));
         }
     }
 
+    /**
+     * 番組データを取得して表示する
+     */
     public function render() {
+        // 番組データの取得
         $this->setPrograms();
 
+        // 表示番組の絞り込みと表示整形
         if (!empty($this->programs)) {
             $animes = [];
             $timezone = new DateTimeZone('Asia/Tokyo');
@@ -72,6 +81,9 @@ class AniTime {
         return;
     }
 
+    /**
+     * 番組データの取得
+     */
     private function setPrograms() {
         // キャッシュ読み込み
         $cachefile = sprintf(self::CACHE_FILE_FORMAT, $this->today->format('Ymd'));
@@ -89,6 +101,9 @@ class AniTime {
         }
     }
 
+    /**
+     * APIアクセス
+     */
     private static function getJson(string $url) {
         $ch = curl_init($url);
 
@@ -112,6 +127,10 @@ class AniTime {
         return $json;
     }
 
+    /**
+     * 読み込んだ設定をチェックしてプロパティに保存する
+     * @param array $config 設定ファイルから読み込んだデータ
+     */
     private function setConfig($config) {
         try {
             if (!empty($config['timeStartHi'])) {
@@ -121,8 +140,8 @@ class AniTime {
                 $this->timeStartHi = $config['timeStartHi'];
             }
             if (!empty($config['timeEndH'])) {
-                if (strlen($config['timeEndH']) != 2 || strtotime($config['timeEndH'].'0000') === false) {
-                    throw new Exception('[timeEndH]: timeEndHiはH形式で指定してください');
+                if (preg_match('/^[1-9]|1[0-9]|2[0-4]$/', $config['timeEndH'] === 0)) {
+                    throw new Exception('[timeEndH]: timeEndHはH形式で指定してください');
                 }
                 $this->timeEndH = $config['timeEndH'];
             }
@@ -131,15 +150,19 @@ class AniTime {
                 if (!is_array($ids)) {
                     throw new Exception("[{$rule}]: 配列形式で指定してください。");
                 }
-                array_map(function($id) {
+                $ids = array_map(function($id) {
                     if (!is_numeric($id)) {
-                        throw new Exception("[{$rule}]: IDを数値で指定してください。");
+                        throw new Exception("[{$rule}]: IDは数値形式で指定してください。");
                     }
+                    return (string)$id;
                 }, $ids);
                 $this->rule[$rule] = $ids;
             };
             if (!empty($config['ChGID'])) {
                 $idCheck($config['ChGID'], 'ChGID');
+            }
+            if (!empty($config['ChID'])) {
+                $idCheck($config['ChID'], 'ChID');
             }
             if (!empty($config['Cat'])) {
                 $idCheck($config['Cat'], 'Cat');
@@ -151,6 +174,11 @@ class AniTime {
         return true;
     }
 
+    /**
+     * 設定による番組の絞り込み
+     * @param  object $anime 番組データ
+     * @return bool          絞り込みの結果（表示に含める場合はtrue）
+     */
     private function validate($anime) {
         $isAgreement = true;
         foreach ($this->rule as $rule => $val) {
@@ -166,5 +194,21 @@ class AniTime {
             }
         }
         return true;
+    }
+
+    /**
+     * ホームディレクトリの取得
+     * @return string ホームディレクトリ配下の設定ファイル保存先パス
+     */
+    private static function getHomeDir() {
+        try {
+            if (!getenv('HOME')) {
+                throw new Exception('設定ファイルを読み込めませんでした。環境変数HOMEを設定してください。');
+            }
+        } catch (Exception $e) {
+            echo 'PathError: '.$e->getMessage().PHP_EOL;
+            exit;
+        }
+        return rtrim(getenv('HOME'), '/') . '/.anitime';
     }
 }
