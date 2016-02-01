@@ -6,12 +6,14 @@
 
 ## Install
 
-スクリプトファイルの`anitime`をパスが通っている場所にコピーして、実行権限を与えてください。
+スクリプトファイル`anitime`のシンボリックリンクを、パスが通っている場所に作成してください。
 
 ```
+$ cd ~/
 $ git clone https://github.com/tmysz/anitime.git
-$ sudo cp ./anitime/anitime /usr/local/bin
-$ sudo chmod a+x /usr/local/bin/anitime
+$ chmod a+x anitime/anitime
+$ mkdir bin
+$ ln -s ~/anitime/anitime ~/bin/anitime
 ```
 
 ## Usage
