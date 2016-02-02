@@ -59,20 +59,20 @@ class AniTime {
 
         // 表示番組の絞り込みと表示整形
         if (!empty($this->programs)) {
-            $animes = [];
+            $programs = [];
             $timezone = new DateTimeZone('Asia/Tokyo');
-            foreach ($this->programs->items as $anime) {
-                if ($this->validate($anime)) {
-                    $animes[] = [
-                        'title'   => $anime->Title,
-                        'date'    => (new DateTime('@'.$anime->StTime))->setTimezone($timezone)->format('m/d H:i'),
-                        'channel' => $anime->ChName,
+            foreach ($this->programs->items as $program) {
+                if ($this->validate($program)) {
+                    $programs[] = [
+                        'title'   => $program->Title,
+                        'date'    => (new DateTime('@'.$program->StTime))->setTimezone($timezone)->format('m/d H:i'),
+                        'channel' => $program->ChName,
                     ];
                 }
             }
-            if (!empty($animes)) {
-                foreach ($animes as $anime) {
-                    echo "{$anime['date']} => {$anime['title']}({$anime['channel']})".PHP_EOL;
+            if (!empty($programs)) {
+                foreach ($programs as $program) {
+                    echo "{$program['date']} => {$program['title']}({$program['channel']})".PHP_EOL;
                 }
                 return;
             }
@@ -99,32 +99,6 @@ class AniTime {
             file_put_contents(sprintf(self::CACHE_FILE_FORMAT, $this->today->format('Ymd')), $json);
             $this->programs = json_decode($json);
         }
-    }
-
-    /**
-     * APIアクセス
-     */
-    private static function getJson(string $url) {
-        $ch = curl_init($url);
-
-        curl_setopt_array($ch, [
-            CURLOPT_CUSTOMREQUEST  => 'GET',
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FAILONERROR    => true,
-            // CURLOPT_USERAGENT      => '',
-        ]);
-
-        try {
-            if (!$json = curl_exec($ch)) {
-                throw new Exception(curl_error($ch));
-            }
-        } catch(Exception $e) {
-            echo $e->getFile().':'.$e->getLine().' '.$e->getMessage()."\n";
-            exit;
-        }
-
-        return $json;
     }
 
     /**
@@ -176,24 +150,50 @@ class AniTime {
 
     /**
      * 設定による番組の絞り込み
-     * @param  object $anime 番組データ
-     * @return bool          絞り込みの結果（表示に含める場合はtrue）
+     * @param  object $program 番組データ
+     * @return bool            絞り込みの結果（表示に含める場合はtrue）
      */
-    private function validate($anime) {
-        $isAgreement = true;
+    private function validate($program) {
+        $isValid = true;
         foreach ($this->rule as $rule => $val) {
             foreach ($val as $v) {
-                if ($anime->{$rule} === $v) {
-                    $isAgreement = true;
+                if ($program->{$rule} === $v) {
+                    $isValid = true;
                     break;
                 }
-                $isAgreement = false;
+                $isValid = false;
             }
-            if (!$isAgreement) {
+            if (!$isValid) {
                 return false;
             }
         }
         return true;
+    }
+
+    /**
+     * APIアクセス
+     */
+    private static function getJson(string $url) {
+        $ch = curl_init($url);
+
+        curl_setopt_array($ch, [
+            CURLOPT_CUSTOMREQUEST  => 'GET',
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FAILONERROR    => true,
+            // CURLOPT_USERAGENT      => '',
+        ]);
+
+        try {
+            if (!$json = curl_exec($ch)) {
+                throw new Exception(curl_error($ch));
+            }
+        } catch(Exception $e) {
+            echo $e->getFile().':'.$e->getLine().' '.$e->getMessage()."\n";
+            exit;
+        }
+
+        return $json;
     }
 
     /**
