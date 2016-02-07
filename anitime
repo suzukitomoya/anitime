@@ -202,15 +202,6 @@ class AniTime {
      */
     private static function getHomeDir() {
         $home = rtrim(getenv('HOME'), '/');
-        try {
-            if (!$home) {
-                throw new Exception('設定ファイルを読み込めませんでした。環境変数HOMEを設定してください。');
-            }
-        } catch (Exception $e) {
-            echo 'PathError: '.$e->getMessage().PHP_EOL;
-            exit;
-        }
-
         if (empty($home)) {
             return '/root/.anitime';
         } else {
