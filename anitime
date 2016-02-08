@@ -10,6 +10,15 @@
  * --force, -f: キャッシュを破棄して番組を再取得する
  */
 
+try {
+    if (version_compare(PHP_VERSION, '7.0.0') == -1) {
+        throw new Exception(sprintf('anitimeコマンドはPHP7以上で動作します。現在、PHP%sで実行中です。', PHP_VERSION));
+    }
+} catch(Exception $e) {
+    echo $e->getMessage()."\n";
+    exit(1);
+}
+
 (new AniTime())->render();
 
 class AniTime {
