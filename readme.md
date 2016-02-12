@@ -1,6 +1,6 @@
 # Anitime
 
-![anitime screenshot](images/anitime.png)
+![anitime screenshot](https://github.com/tmysz/anitime/wiki/images/anitime.png)
 
 コンソール上でアニメ等の放送時間情報を表示するPHP製のCLIスクリプトです。
 番組データの取得には[しょぼいカレンダー](http://cal.syoboi.jp/)のAPIを使用しています。  
