@@ -1,5 +1,7 @@
 # Anitime
 
+![anitime screenshot](images/anitime.png)
+
 コンソール上でアニメ等の放送時間情報を表示するPHP製のCLIスクリプトです。
 番組データの取得には[しょぼいカレンダー](http://cal.syoboi.jp/)のAPIを使用しています。  
 なお、実行にはPHP7が必要になります。
